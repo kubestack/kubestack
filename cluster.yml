@@ -1,0 +1,64 @@
+---
+- hosts: all
+  gather_facts: false
+  sudo: yes
+  roles:
+    - pre-ansible
+  tags:
+    - pre-ansible
+
+# name resolution
+- hosts:
+    - etcd
+    - masters
+    - nodes
+  sudo: yes
+  roles:
+    - { role: set_hostname_and_etc_hosts, instances_list: ['kube-master', 'kube-minion-1', 'kube-minion-2' ] }
+  tags:
+    - name_resolution
+
+# Install etcd
+- hosts: etcd
+  sudo: yes
+  roles:
+    - etcd
+  tags:
+    - etcd
+
+# install flannel
+- hosts:
+    - etcd
+    - masters
+    - nodes
+  sudo: yes
+  roles:
+    - flannel
+  tags:
+    - flannel
+
+# install kube master services
+- hosts: masters
+  sudo: yes
+  roles:
+    - master
+  tags:
+    - masters
+
+# launch addons, like dns
+- hosts: masters
+  sudo: yes
+  roles:
+    - kubernetes-addons
+  tags:
+    - addons
+    - dns
+
+# install kubernetes on the nodes
+- hosts: nodes
+  sudo: yes
+  roles:
+    - node
+    - { role: set_hostname_and_etc_hosts, instances_list: ['kube-master', 'kube-minion-1', 'kube-minion-2' ] }
+  tags:
+    - nodes
