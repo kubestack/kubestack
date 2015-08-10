@@ -1,0 +1,40 @@
+{
+  "id": "jenkins-slave",
+  "apiVersion": "v1",
+  "kind": "ReplicationController",
+  "metadata": {
+    "name": "jenkins-slave",
+    "labels": {
+      "name": "jenkins-slave"
+    }
+  },
+  "spec": {
+    "replicas": 1,
+    "selector": {
+      "name": "jenkins-slave"
+    },
+    "template": {
+      "metadata":{
+        "labels":{
+          "name":"jenkins-slave"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "jenkins-slave",
+            "image": "csanchez/jenkins-swarm-slave:1.21",
+             "command": [
+              "sh",
+              "-c",
+              "/usr/local/bin/jenkins-slave.sh -master https://$JENKINS_HOST -username $JENKINS_USER -password $JENKINS_PASS -executors 1"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "labels": {
+    "name": "jenkins-slave"
+  }
+}
