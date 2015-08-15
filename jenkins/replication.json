@@ -11,23 +11,23 @@
   "spec": {
     "replicas": 1,
     "selector": {
-      "name": "jenkins-slave"
+      "name": "jenkins"
     },
     "template": {
       "metadata":{
         "labels":{
-          "name":"jenkins-slave"
+          "name":"jenkins"
         }
       },
       "spec": {
         "containers": [
           {
             "name": "jenkins-slave",
-            "image": "csanchez/jenkins-swarm-slave:1.21",
-             "command": [
+            "image": "yrobla/jenkins-slave-swarm-infra:latest",
+            "command": [
               "sh",
               "-c",
-              "/usr/local/bin/jenkins-slave.sh -master https://$JENKINS_HOST -username $JENKINS_USER -password $JENKINS_PASS -executors 1"
+              "/usr/local/bin/jenkins-slave.sh -master http://10.0.0.42 -username $JENKINS_USER -password $JENKINS_PASS -executors 1 -labels $JENKINS_LABEL"
             ]
           }
         ]
@@ -38,3 +38,4 @@
     "name": "jenkins-slave"
   }
 }
+
