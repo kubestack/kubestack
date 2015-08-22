@@ -63,8 +63,12 @@ class KubestackCmd(object):
         pass
 
     # delete
-    def delete(self, pod_id):
-        pass
+    def delete(self):
+        status = self.kubestack.kube.delete(url='/pods/%s' % self.args.id)
+        if status.status_code == 200:
+            print "Pod %s deleted successfully" % self.args.id
+        else:
+            print "Error on deleting. Status %s, error %s" % (status.status_code, status.reason)
 
 def main():
     cmd = KubestackCmd()
