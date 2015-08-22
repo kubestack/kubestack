@@ -9,7 +9,7 @@ import sys
 
 from kubestack import kubestack
 
-class Kubestack(object):
+class KubestackCmd(object):
     def __init__(self):
         self.args = None
 
@@ -22,10 +22,10 @@ class Kubestack(object):
         self.args = parser.parse_args()
 
     def main(self):
-        self.nodepool_job_launcher = nodepool_job_launcher.Launcher(self.args.config, self.args.job)
+        self.kubestack = kubestack.Kubestack(self.args.config)
 
 def main():
-    cmd = NodepoolJobLauncherCmd()
+    cmd = KubestackCmd()
     cmd.parse_arguments()
     return cmd.main()
 

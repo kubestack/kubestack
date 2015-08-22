@@ -6,29 +6,38 @@ import sys
 import time
 import yaml
 
+from kubeclient import swagger, ApivbetaApi
+
 from uuid import uuid4
 
 class Kubestack():
-    def __init__(self, configfile, job):
+    def __init__(self, configfile):
         self.configfile = configfile
-        self.job = job
-        self.jobs = {}
         self.gearman = None
         self.jenkins = None
+        self.kube    = None
 
         self.loadConfig()
         self.connectGearman()
-        self.connectJenkins()
-        self.launchJob()
+        self.connectKube()
 
     # start the connection with gearman server
     def connectGearman(self):
         self.gearman = gear.Client()
         try:
-            self.gearman.addServer(self.gearman_server, self.gearman_port)
+            self.gearman.addServer(self.gearman_config['host'], self.gearman_config['port'])
             self.gearman.waitForServer()
         except:
             print "Error connecting to gearman server"
+            sys.exit(1)
+
+    # start the configuration with kubernetes
+    def connectKube(self):
+        try:
+            swclient = swagger.ApiClient(self.kubernetes_config['url'], self.kubernetes_config['api_key'])
+            self.kube = ApivbetaApi.ApivbetaApi(swclient)
+        except:
+            print "Error connecting to Kubernetes"
             sys.exit(1)
 
     # load configuration details
@@ -40,10 +49,17 @@ class Kubestack():
             print error_message
             sys.exit(1)
 
-        self.gearman_server = config.get('gearman-server', '127.0.0.1')
-        self.gearman_port = config.get('gearman-port', 4730)
+        self.gearman_config = config.get('gearman-server', {})
+        if not set(('host', 'port')).issubset(self.gearman_config):
+            print "Gearman configuration is not properly set"
+            sys.exit(1)
 
         self.jenkins_config = config.get('jenkins', {})
         if not set(('url', 'user', 'pass')).issubset(self.jenkins_config):
             print "Jenkins configuration is not properly set"
+            sys.exit(1)
+
+        self.kubernetes_config = config.get('kubernetes', {})
+        if not set(('url', 'api_key')).issubset(self.kubernetes_config):
+            print "Kuberentes configuration is not properly set"
             sys.exit(1)

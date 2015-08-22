@@ -1,2 +1,5 @@
 wheel==0.23.0
 python-k8sclient
+gear
+python-jenkins
+pyyaml

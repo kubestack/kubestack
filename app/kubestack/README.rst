@@ -17,4 +17,18 @@ Python app to manage dynamic Jenkins slaves with Kubernetes
 Features
 --------
 
-* TODO
+* Creates dynamic jenkins slaves based on kubernetes
+
+Configuration file needed on /etc/kubestack/config.yaml
+-------------------------------------------------------
+gearman-server:
+    host: gearman_host
+    port: 4730
+jenkins:
+    url: 'https://url.to.jenkins/'
+    user: jenkins_user
+    pass: jenkins_pass
+kubernetes:
+    url: 'http://url_to_kubernetes/'
+    api_key: kubernetes_api_key
+
