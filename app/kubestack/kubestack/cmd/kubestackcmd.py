@@ -8,6 +8,7 @@ import argparse
 import sys
 
 from kubestack import kubestack
+from prettytable import PrettyTable
 
 class KubestackCmd(object):
     def __init__(self):
@@ -47,8 +48,15 @@ class KubestackCmd(object):
 
     # list pods
     def list(self, labels = []):
+        t = PrettyTable(["ID", "Name", "Labels", "Created"])
+        t.align = 'l'
+
         pods = self.kubestack.kube.get(url='/pods')
-        print self.kubestack.kube.get_json(pods)
+        pod_list = self.kubestack.kube.get_json(pods)
+        for pod_item in pod_list['items']:
+            t.add_row([pod_item['metadata']['uid'], pod_item['metadata']['name'],
+                       pod_item['metadata']['labels'], pod_item['metadata']['creationTimestamp']])
+        print t
 
     # create
     def create(self, pod_type):
