@@ -28,6 +28,9 @@ class KubestackCmd(object):
         cmd_list = subparsers.add_parser('list', help='list pods')
         cmd_list.set_defaults(func=self.list)
 
+        cmd_list_templates = subparsers.add_parser('list_templates', help='list pod templates')
+        cmd_list_templates.set_defaults(func=self.list_templates)
+
         cmd_delete = subparsers.add_parser(
             'delete',
             help='delete a pod')
@@ -40,6 +43,13 @@ class KubestackCmd(object):
         cmd_create.set_defaults(func=self.create)
         cmd_create.add_argument('type', help='pod type')
 
+        cmd_create_template = subparsers.add_parser(
+            'create_template',
+            help='create a pod template')
+        cmd_create_template.set_defaults(func=self.create_template)
+        cmd_create_template.add_argument('label', help='template label')
+        cmd_create_template.add_argument('image', help='template image')
+
         self.args = parser.parse_args()
 
     def main(self):
@@ -47,25 +57,43 @@ class KubestackCmd(object):
         self.args.func()
 
     # list pods
-    def list(self, labels = []):
+    def list(self):
         t = PrettyTable(["ID", "Name", "Labels", "Created"])
         t.align = 'l'
 
-        pods = self.kubestack.kube.get(url='/pods')
-        pod_list = self.kubestack.kube.get_json(pods)
-        for pod_item in pod_list['items']:
+        pods = self.kubestack.getPods()
+        for pod_item in pods['items']:
             t.add_row([pod_item['metadata']['uid'], pod_item['metadata']['name'],
                        pod_item['metadata']['labels'], pod_item['metadata']['creationTimestamp']])
         print t
 
+    # list templates
+    def list_templates(self):
+        t = PrettyTable(["ID", "Name", "Labels", "Created"])
+        t.align = 'l'
+
+        pods = self.kubestack.getPodTemplates()
+        for pod_item in pods['items']:
+            t.add_row([pod_item['metadata']['uid'], pod_item['metadata']['name'],
+                       pod_item['metadata']['labels'], pod_item['metadata']['creationTimestamp']])
+        print t
+
+    # create a pod template
+    def create_template(self):
+        status = self.kubestack.createPodTemplate(self.args.label, self.args.image)
+        if status.status_code == 200:
+            print "Pod template with label %s and image %s created successfully" % (self.args.label, self.args.image)
+        else:
+            print "Error on creating pod template. Status %s, error %s" % (status.status_code, status.reason)
+
     # create
-    def create(self, pod_type):
+    def create(self):
         pass
 
     # delete
     def delete(self):
-        status = self.kubestack.kube.delete(url='/pods/%s' % self.args.id)
-        if status.status_code == 200:
+        status = self.kubestack.deletePod(self.args.id)
+        if status.status_code == 201:
             print "Pod %s deleted successfully" % self.args.id
         else:
             print "Error on deleting. Status %s, error %s" % (status.status_code, status.reason)

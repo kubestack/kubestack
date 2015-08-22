@@ -2,6 +2,7 @@
 import gear
 import jenkins
 import json
+import requests
 import sys
 import time
 import yaml
@@ -63,3 +64,59 @@ class Kubestack():
         if not set(('url', 'api_key')).issubset(self.kubernetes_config):
             print "Kuberentes configuration is not properly set"
             sys.exit(1)
+
+    # returns a list of pods
+    def getPods(self):
+        pods = self.kube.get(url='/pods')
+        pod_list = self.kube.get_json(pods)
+        return pod_list
+
+    # returns a list of pod templates
+    def getPodTemplates(self):
+        pod_templates = self.kube.get(url='/podtemplates')
+        pod_template_list = self.kube.get_json(pod_templates)
+        return pod_template_list
+
+    # delete a given pod
+    def deletePod(self, pod_id):
+        status = self.kube.delete(url='/pods/%s' % pod_id)
+        return status
+
+    # create a template for a slave with the given label and image
+    def createPodTemplate(self, label, image):
+        template_id = "jenkins-slave-%s" % uuid4()
+        template_content = {
+            "kind": "PodTemplate",
+            "apiVersion": "v1",
+            "metadata": {
+                "name": template_id,
+                "labels": {
+                    "name": "jenkins-slave-%s" % label,
+                }
+            },
+            "template": {
+                "metadata": {
+                    "name": template_id,
+                    "labels": {
+                        "name": "jenkins-slave-%s" % label,
+                    }
+                },
+                "spec": {
+                    "containers": [
+                        {
+                            "name": "jenkins-slave-%s" % label,
+                            "image": image,
+                            "command": [
+                                "sh",
+                                "-c",
+                                "/usr/local/bin/jenkins-slave.sh -master %s -username %s -password %s -executors 1 -labels %s" %
+                                (self.jenkins_config['url'], self.jenkins_config['user'],
+                                 self.jenkins_config['pass'], label)
+                            ]
+                        }
+                    ]
+                }
+            }
+        }
+        result = self.kube.post(url='/podtemplates', json=template_content)
+        return result
