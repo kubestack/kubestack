@@ -6,7 +6,7 @@ import sys
 import time
 import yaml
 
-from kubeclient import swagger, ApivbetaApi
+from kubeclient import KubeClient
 
 from uuid import uuid4
 
@@ -34,10 +34,10 @@ class Kubestack():
     # start the configuration with kubernetes
     def connectKube(self):
         try:
-            swclient = swagger.ApiClient(self.kubernetes_config['url'], self.kubernetes_config['api_key'])
-            self.kube = ApivbetaApi.ApivbetaApi(swclient)
-        except:
+            self.kube = KubeClient(self.kubernetes_config['url'], token=self.kubernetes_config['api_key'])
+        except Exception as e:
             print "Error connecting to Kubernetes"
+            print str(e)
             sys.exit(1)
 
     # load configuration details
