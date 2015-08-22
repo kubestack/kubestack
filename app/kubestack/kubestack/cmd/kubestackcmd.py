@@ -41,7 +41,8 @@ class KubestackCmd(object):
             'create',
             help='create a pod')
         cmd_create.set_defaults(func=self.create)
-        cmd_create.add_argument('type', help='pod type')
+        cmd_create.add_argument('label', help='template label')
+        cmd_create.add_argument('image', help='template image')
 
         cmd_create_template = subparsers.add_parser(
             'create_template',
@@ -81,19 +82,23 @@ class KubestackCmd(object):
     # create a pod template
     def create_template(self):
         status = self.kubestack.createPodTemplate(self.args.label, self.args.image)
-        if status.status_code == 200:
+        if status.status_code == 201:
             print "Pod template with label %s and image %s created successfully" % (self.args.label, self.args.image)
         else:
             print "Error on creating pod template. Status %s, error %s" % (status.status_code, status.reason)
 
     # create
     def create(self):
-        pass
+        status = self.kubestack.createPod(self.args.label, self.args.image)
+        if status.status_code == 201:
+            print "Pod template with label %s and image %s created successfully" % (self.args.label, self.args.image)
+        else:
+            print "Error on creating pod template. Status %s, error %s" % (status.status_code, status.reason)
 
     # delete
     def delete(self):
         status = self.kubestack.deletePod(self.args.id)
-        if status.status_code == 201:
+        if status.status_code == 200:
             print "Pod %s deleted successfully" % self.args.id
         else:
             print "Error on deleting. Status %s, error %s" % (status.status_code, status.reason)

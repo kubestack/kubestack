@@ -82,6 +82,37 @@ class Kubestack():
         status = self.kube.delete(url='/pods/%s' % pod_id)
         return status
 
+    # create a pod for a slave with the given label and image
+    def createPod(self, label, image):
+        pod_id = "jenkins-slave-%s" % uuid4()
+        pod_content = {
+            "kind": "Pod",
+            "apiVersion": "v1",
+            "metadata": {
+                "name": pod_id,
+                "labels": {
+                    "name": "jenkins-slave-%s" % label,
+                }
+            },
+            "spec": {
+                "containers": [
+                    {
+                        "name": "jenkins-slave-%s" % label,
+                        "image": image,
+                        "command": [
+                            "sh",
+                            "-c",
+                            "/usr/local/bin/jenkins-slave.sh -master %s -username %s -password %s -executors 1 -labels %s" %
+                            (self.jenkins_config['url'], self.jenkins_config['user'],
+                             self.jenkins_config['pass'], label)
+                        ]
+                    }
+                ]
+            }
+        }
+        result = self.kube.post(url='/pods', json=pod_content)
+        return result
+
     # create a template for a slave with the given label and image
     def createPodTemplate(self, label, image):
         template_id = "jenkins-slave-%s" % uuid4()
