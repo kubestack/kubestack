@@ -5,32 +5,54 @@ import json
 import requests
 import sys
 import time
+import threading
 import yaml
 
 from kubeclient import KubeClient
 
 from uuid import uuid4
 
-class Kubestack():
+class Kubestack(threading.Thread):
+
     def __init__(self, configfile):
+        threading.Thread.__init__(self, name='Kubestack')
         self.configfile = configfile
-        self.gearman = None
         self.jenkins = None
         self.kube    = None
+        self._stopped = False
+        self.watermark_sleep = 10
+        self.demand_listeners = []
 
         self.loadConfig()
-        self.connectGearman()
         self.connectKube()
 
+    # stops thread properly
+    def stop(self):
+        self._stopped = True
+
+    def _run(self):
+        pass
+
+    # main thread worker
+    def run(self):
+        while not self._stopped:
+          print "in run"  
+          try:
+              self._run()
+          except Exception:
+              self.log.exception("Exception in main loop")
+          time.sleep(self.watermark_sleep)
+
     # start the connection with gearman server
-    def connectGearman(self):
-        self.gearman = gear.Client()
+    def connectGearman(self, host, port):
+        gearman = gear.Client()
         try:
-            self.gearman.addServer(self.gearman_config['host'], self.gearman_config['port'])
-            self.gearman.waitForServer()
+            gearman.addServer(host, port)
+            gearman.waitForServer()
         except:
             print "Error connecting to gearman server"
             sys.exit(1)
+        return gearman
 
     # start the configuration with kubernetes
     def connectKube(self):
@@ -50,11 +72,6 @@ class Kubestack():
             print error_message
             sys.exit(1)
 
-        self.gearman_config = config.get('gearman-server', {})
-        if not set(('host', 'port')).issubset(self.gearman_config):
-            print "Gearman configuration is not properly set"
-            sys.exit(1)
-
         self.jenkins_config = config.get('jenkins', {})
         if not set(('url', 'user', 'pass')).issubset(self.jenkins_config):
             print "Jenkins configuration is not properly set"
@@ -64,6 +81,19 @@ class Kubestack():
         if not set(('url', 'api_key')).issubset(self.kubernetes_config):
             print "Kuberentes configuration is not properly set"
             sys.exit(1)
+
+        # read demand listeners
+        demand_listeners = config.get('demand-listeners', [])
+        for listener in demand_listeners:
+            if listener['type'] == 'gearman':
+                if not set(('host', 'port')).issubset(listener):
+                    print "Gearman configuration is not properly set"
+                    sys.exit(1)
+
+                listener['gear'] = self.connectGearman(listener['host'], listener['port'])
+            # add demand listener
+            self.demand_listeners.append(listener)
+        print self.demand_listeners
 
     # returns a list of pods
     def getPods(self):
@@ -80,6 +110,11 @@ class Kubestack():
     # delete a given pod
     def deletePod(self, pod_id):
         status = self.kube.delete(url='/pods/%s' % pod_id)
+        return status
+
+    # delete a given template
+    def deletePodTemplate(self, template_id):
+        status = self.kube.delete(url='/podtemplates/%s' % template_id)
         return status
 
     # create a pod for a slave with the given label and image

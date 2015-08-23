@@ -37,6 +37,12 @@ class KubestackCmd(object):
         cmd_delete.set_defaults(func=self.delete)
         cmd_delete.add_argument('id', help='pod id')
 
+        cmd_delete_template = subparsers.add_parser(
+            'delete_template',
+            help='delete a template')
+        cmd_delete_template.set_defaults(func=self.delete_template)
+        cmd_delete_template.add_argument('id', help='template id')
+
         cmd_create = subparsers.add_parser(
             'create',
             help='create a pod')
@@ -102,6 +108,14 @@ class KubestackCmd(object):
             print "Pod %s deleted successfully" % self.args.id
         else:
             print "Error on deleting. Status %s, error %s" % (status.status_code, status.reason)
+
+    # delete template
+    def delete_template(self):
+        status = self.kubestack.deletePodTemplate(self.args.id)
+        if status.status_code == 200:
+            print "Pod template %s deleted successfully" % self.args.id
+        else:
+            print "Error on deleting pod template. Status %s, error %s" % (status.status_code, status.reason)
 
 def main():
     cmd = KubestackCmd()
