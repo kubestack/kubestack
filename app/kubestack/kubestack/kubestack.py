@@ -27,6 +27,7 @@ class Kubestack(threading.Thread):
         self._stopped = False
         self.watermark_sleep = 10
         self.demand_listeners = []
+        self.destroy_listeners = []
 
         self.loadConfig()
         self.connectKube()
@@ -59,6 +60,7 @@ class Kubestack(threading.Thread):
           except Exception as e:
               print str(e)
               self.log.exception("Exception in main loop")
+
           time.sleep(self.watermark_sleep)
 
     # start the configuration with kubernetes
@@ -107,6 +109,19 @@ class Kubestack(threading.Thread):
 
             # add demand listener
             self.demand_listeners.append(listener)
+
+        #  read destroy listeners
+        for listener in destroy_listeners:
+            if listener['type'] == 'zmq':
+                if not set(('host', 'port')).issubset(listener):
+                    print "ZMQ configuration is not properly set"
+                    sys.exit(1)
+
+                listener['object'] = destroy_listeners.ZMQClient(listener['host'], listener['port'])
+                listener['object'].connect()
+
+            # add destroy listener
+            self.destroy_listeners.append(listener)
 
     # returns a list of pods
     def getPods(self):
