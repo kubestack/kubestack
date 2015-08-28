@@ -16,6 +16,7 @@ from uuid import uuid4
 
 class Kubestack(threading.Thread):
     log = logging.getLogger("kubestack.Kubestack") 
+    POD_PREFIX = 'jenkins-slave'
 
     def __init__(self, configfile):
         threading.Thread.__init__(self, name='Kubestack')
@@ -42,10 +43,17 @@ class Kubestack(threading.Thread):
         while not self._stopped:
           try:
               for demand_listener in self.demand_listeners:
+                  # it returns a dict with object:total_needed
                   pods = demand_listener['object'].getDemand()
-                  for pod in pods:
-                      # create new nodes
-                      self.createPod(pod, self.image)
+                  for key, val in pods.items():
+                      total_existing = self.getExistingPods(key)
+                      current_demand = val - total_existing
+                      print current_demand
+                      # create all pods that we need
+                      if current_demand > 0:
+                          # create all the pods we need
+                          for _ in range(current_demand):
+                              self.createPod(key, self.image)
 
               self._run()
           except Exception as e:
@@ -106,6 +114,20 @@ class Kubestack(threading.Thread):
         pod_list = self.kube.get_json(pods)
         return pod_list
 
+    # return the number of pods building or ready, with that label
+    def getExistingPods(self, label):
+        pod_list = self.getPods()
+        total_available = 0
+        for pod_item in pod_list['items']:
+            current_label = pod_item['metadata']['labels']['name']
+
+            if current_label == self.POD_PREFIX + '-' + label:
+                # if label found, check for state
+                status = pod_item['status']['phase']
+                if status in ('Pending', 'Running'):
+                    total_available += 1
+        return total_available
+
     # returns a list of pod templates
     def getPodTemplates(self):
         pod_templates = self.kube.get(url='/podtemplates')
@@ -124,7 +146,8 @@ class Kubestack(threading.Thread):
 
     # create a pod for a slave with the given label and image
     def createPod(self, label, image):
-        pod_id = "jenkins-slave-%s" % uuid4()
+        print "in create"
+        pod_id = self.POD_PREFIX + "-%s" % uuid4()
         pod_content = {
             "kind": "Pod",
             "apiVersion": "v1",
