@@ -1,8 +1,12 @@
+import json
+import logging
 import threading
 import zmq
 
 # connects to zmq socket and listens to events
 class ZMQClient(threading.Thread):
+    log = logging.getLogger("kubestack.ZMQClient")
+
     def __init__(self, kube, host, port):
         threading.Thread.__init__(self, name='ZMQClient')
         self.zmq_context = zmq.Context()
@@ -10,7 +14,8 @@ class ZMQClient(threading.Thread):
         self.socket.RCVTIMEO = 1000
         event_filter = b''
         self.socket.setsockopt(zmq.SUBSCRIBE, event_filter)
-        self.socket.connect('tcp://%s:%s' % (host, port))
+        final_url = "tcp://%s:%s" % (host, port)
+        self.socket.connect(final_url)
         self._stopped = False
         self.kube = kube
 
@@ -25,7 +30,8 @@ class ZMQClient(threading.Thread):
             try:
                 topic, data = m.split(None, 1)
                 self.handleEvent(topic, data)
-            except Exception:
+            except Exception as e:
+                print str(e)
                 self.log.exception("Exception handling job:")
 
     def stop(self):
@@ -33,8 +39,8 @@ class ZMQClient(threading.Thread):
 
     def handleEvent(self, topic, data):
         # read event and listen for finished jobs
-        self.log.debug("ZMQ received: %s %s" % (topic, data))
         args = json.loads(data)
+        print args
         build = args['build']
         if 'node_name' not in build:
             return

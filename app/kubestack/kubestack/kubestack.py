@@ -116,6 +116,7 @@ class Kubestack(threading.Thread):
                     sys.exit(1)
 
                 listener['object'] = destroy_listeners.ZMQClient(self, listener['host'], listener['port'])
+                listener['object'].start()
 
             # add destroy listener
             self.destroy_listeners.append(listener)
@@ -149,15 +150,19 @@ class Kubestack(threading.Thread):
     # delete a given pod
     def deletePod(self, pod_id):
         status = self.kube.delete(url='/pods/%s' % pod_id)
+        print status
         return status
 
     # handles completion of a pod
     def podCompleted(self, pod_id):
-        self.deletePod(pod_id)
+        print "in completed"
+        # swarm concats a sufix at the end, we need to get rid of it
+        fragments = pod_id.split('-')
+        fragments.pop()
+        self.deletePod('-'.join(fragments))
 
     # delete pods starting with a given label
     def deletePodsByLabel(self, label):
-        print "here"
         pod_list = self.getPods()
         total_available = 0
         for pod_item in pod_list['items']:
@@ -177,7 +182,6 @@ class Kubestack(threading.Thread):
 
     # create a pod for a slave with the given label and image
     def createPod(self, label, image):
-        print "in create"
         pod_id = self.POD_PREFIX + "-%s" % uuid4()
         pod_content = {
             "kind": "Pod",
