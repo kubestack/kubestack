@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-import gear
 import jenkins
 import json
 import listeners
+import destroy_listeners
 import logging
 import requests
 import sys
@@ -31,13 +31,11 @@ class Kubestack(threading.Thread):
 
         self.loadConfig()
         self.connectKube()
+        self.deletePodsByLabel(self.POD_PREFIX)
 
     # stops thread properly
     def stop(self):
         self._stopped = True
-
-    def _run(self):
-        pass
 
     # main thread worker
     def run(self):
@@ -56,7 +54,6 @@ class Kubestack(threading.Thread):
                           for _ in range(current_demand):
                               self.createPod(key, self.image)
 
-              self._run()
           except Exception as e:
               print str(e)
               self.log.exception("Exception in main loop")
@@ -111,14 +108,14 @@ class Kubestack(threading.Thread):
             self.demand_listeners.append(listener)
 
         #  read destroy listeners
-        for listener in destroy_listeners:
+        dlisteners = config.get('destroy-listeners', [])
+        for listener in dlisteners:
             if listener['type'] == 'zmq':
                 if not set(('host', 'port')).issubset(listener):
                     print "ZMQ configuration is not properly set"
                     sys.exit(1)
 
-                listener['object'] = destroy_listeners.ZMQClient(listener['host'], listener['port'])
-                listener['object'].connect()
+                listener['object'] = destroy_listeners.ZMQClient(self, listener['host'], listener['port'])
 
             # add destroy listener
             self.destroy_listeners.append(listener)
@@ -153,6 +150,25 @@ class Kubestack(threading.Thread):
     def deletePod(self, pod_id):
         status = self.kube.delete(url='/pods/%s' % pod_id)
         return status
+
+    # handles completion of a pod
+    def podCompleted(self, pod_id):
+        self.deletePod(pod_id)
+
+    # delete pods starting with a given label
+    def deletePodsByLabel(self, label):
+        print "here"
+        pod_list = self.getPods()
+        total_available = 0
+        for pod_item in pod_list['items']:
+            print "in pod"
+            current_label = pod_item['metadata']['labels']['name']
+            print current_label
+
+            if label in current_label:
+                print "delete"
+                # delete this pod
+                self.deletePod(pod_item['metadata']['name'])
 
     # delete a given template
     def deletePodTemplate(self, template_id):
