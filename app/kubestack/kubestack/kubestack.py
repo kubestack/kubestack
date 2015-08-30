@@ -28,6 +28,8 @@ class Kubestack(threading.Thread):
         self.watermark_sleep = 10
         self.demand_listeners = []
         self.destroy_listeners = []
+        self.existing_pods = 0
+        self.lock = threading.Lock()
 
         self.loadConfig()
         self.connectKube()
@@ -45,9 +47,8 @@ class Kubestack(threading.Thread):
                   # it returns a dict with object:total_needed
                   pods = demand_listener['object'].getDemand()
                   for key, val in pods.items():
-                      total_existing = self.getExistingPods(key)
+                      total_existing = self.getExistingPods()
                       current_demand = val - total_existing
-                      print current_demand
                       # create all pods that we need
                       if current_demand > 0:
                           # create all the pods we need
@@ -127,19 +128,12 @@ class Kubestack(threading.Thread):
         pod_list = self.kube.get_json(pods)
         return pod_list
 
-    # return the number of pods building or ready, with that label
-    def getExistingPods(self, label):
-        pod_list = self.getPods()
-        total_available = 0
-        for pod_item in pod_list['items']:
-            current_label = pod_item['metadata']['labels']['name']
-
-            if current_label == self.POD_PREFIX + '-' + label:
-                # if label found, check for state
-                status = pod_item['status']['phase']
-                if status in ('Pending', 'Running'):
-                    total_available += 1
-        return total_available
+    # return the number of pods already in the system, locking access
+    def getExistingPods(self):
+        self.lock.acquire()
+        number = self.existing_pods
+        self.lock.release()
+        return number
 
     # returns a list of pod templates
     def getPodTemplates(self):
@@ -149,13 +143,21 @@ class Kubestack(threading.Thread):
 
     # delete a given pod
     def deletePod(self, pod_id):
-        status = self.kube.delete(url='/pods/%s' % pod_id)
-        print status
-        return status
+        try:
+            self.lock.acquire()
+            status = self.kube.delete(url='/pods/%s' % pod_id)
+            self.existing_pods -= 1
+            if self.existing_pods < 0:
+                self.existing_pods = 0
+            self.lock.release()
+            return status
+        except Exception as e:
+            print str(e)
+            self.log.debug("Exception in deleting pods")
+            return False
 
     # handles completion of a pod
     def podCompleted(self, pod_id):
-        print "in completed"
         # swarm concats a sufix at the end, we need to get rid of it
         fragments = pod_id.split('-')
         fragments.pop()
@@ -166,12 +168,9 @@ class Kubestack(threading.Thread):
         pod_list = self.getPods()
         total_available = 0
         for pod_item in pod_list['items']:
-            print "in pod"
             current_label = pod_item['metadata']['labels']['name']
-            print current_label
 
             if label in current_label:
-                print "delete"
                 # delete this pod
                 self.deletePod(pod_item['metadata']['name'])
 
@@ -182,34 +181,43 @@ class Kubestack(threading.Thread):
 
     # create a pod for a slave with the given label and image
     def createPod(self, label, image):
-        pod_id = self.POD_PREFIX + "-%s" % uuid4()
-        pod_content = {
-            "kind": "Pod",
-            "apiVersion": "v1",
-            "metadata": {
-                "name": pod_id,
-                "labels": {
-                    "name": "jenkins-slave-%s" % label,
-                }
-            },
-            "spec": {
-                "containers": [
-                    {
+        try:
+            self.lock.acquire()
+            pod_id = self.POD_PREFIX + "-%s" % uuid4()
+            pod_content = {
+                "kind": "Pod",
+                "apiVersion": "v1",
+                "metadata": {
+                    "name": pod_id,
+                    "labels": {
                         "name": "jenkins-slave-%s" % label,
-                        "image": image,
-                        "command": [
-                            "sh",
-                            "-c",
-                            "/usr/local/bin/jenkins-slave.sh -master %s -username %s -password %s -executors 1 -labels %s" %
-                            (self.jenkins_config['url'], self.jenkins_config['user'],
-                             self.jenkins_config['pass'], label)
-                        ]
                     }
-                ]
+                },
+                "spec": {
+                    "containers": [
+                        {
+                            "name": "jenkins-slave-%s" % label,
+                            "image": image,
+                            "command": [
+                                "sh",
+                                "-c",
+                                "/usr/local/bin/jenkins-slave.sh -master %s -username %s -password %s -executors 1 -labels %s" %
+                                (self.jenkins_config['url'], self.jenkins_config['user'],
+                                 self.jenkins_config['pass'], label)
+                            ]
+                        }
+                    ]
+                }
             }
-        }
-        result = self.kube.post(url='/pods', json=pod_content)
-        return result
+            result = self.kube.post(url='/pods', json=pod_content)
+            self.existing_pods += 1
+            self.lock.release()
+            return result
+        except Exception as e:
+            self.lock.release()
+            print str(e)
+            self.log.exception("Exception creating pod")
+            return False
 
     # create a template for a slave with the given label and image
     def createPodTemplate(self, label, image):

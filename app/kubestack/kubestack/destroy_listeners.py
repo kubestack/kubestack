@@ -1,26 +1,41 @@
 import json
 import logging
 import threading
+import time
 import zmq
 
 # connects to zmq socket and listens to events
 class ZMQClient(threading.Thread):
     log = logging.getLogger("kubestack.ZMQClient")
+    watermark_sleep = 1
 
     def __init__(self, kube, host, port):
         threading.Thread.__init__(self, name='ZMQClient')
+        self.host = host
+        self.port = port
         self.zmq_context = zmq.Context()
-        self.socket = self.zmq_context.socket(zmq.SUB)
-        self.socket.RCVTIMEO = 1000
-        event_filter = b''
-        self.socket.setsockopt(zmq.SUBSCRIBE, event_filter)
-        final_url = "tcp://%s:%s" % (host, port)
-        self.socket.connect(final_url)
+        self.connect_socket()
         self._stopped = False
         self.kube = kube
 
+    # method to connect to external zmq
+    def connect_socket(self):
+        self.socket = self.zmq_context.socket(zmq.SUB)
+        event_filter = b''
+        self.socket.setsockopt(zmq.SUBSCRIBE, event_filter)
+        self.socket.RCVTIMEO = 5000
+        final_url = "tcp://%s:%s" % (self.host, self.port)
+        self.socket.connect(final_url)
+
+    def check_socket_health(self):
+        if not self.zmq_context or self.zmq_context.closed:
+            self.zmq_context = zmq.Context()
+        if not self.socket or self.socket.closed:
+            self.connect_socket()
+
     def run(self):
         while not self._stopped:
+            self.check_socket_health()
             try:
                 m = self.socket.recv().decode('utf-8')
             except zmq.error.Again:
