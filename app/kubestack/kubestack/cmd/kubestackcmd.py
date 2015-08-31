@@ -60,7 +60,7 @@ class KubestackCmd(object):
         self.args = parser.parse_args()
 
     def main(self):
-        self.kubestack = kubestack.Kubestack(self.args.config)
+        self.kubestack = kubestack.Kubestack(self.args.config, start_listeners=False)
         self.args.func()
 
     # list pods
@@ -97,7 +97,7 @@ class KubestackCmd(object):
     def create(self):
         status = self.kubestack.createPod(self.args.label, self.args.image)
         if status.status_code == 201:
-            print "Pod template with label %s and image %s created successfully" % (self.args.label, self.args.image)
+            print "Pod with label %s and image %s created successfully" % (self.args.label, self.args.image)
         else:
             print "Error on creating pod template. Status %s, error %s" % (status.status_code, status.reason)
 

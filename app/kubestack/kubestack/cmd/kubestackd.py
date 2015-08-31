@@ -44,6 +44,7 @@ class KubestackDaemon(object):
         signal.signal(signal.SIGUSR1, self.exit_handler)
         signal.signal(signal.SIGTERM, self.term_handler)
 
+        self.kubestack.deletePodsByLabel(self.kubestack.POD_PREFIX)
         self.kubestack.start()
 
         while True:

@@ -11,17 +11,16 @@ import threading
 import yaml
 
 from kubeclient import KubeClient
-
 from uuid import uuid4
 
 class Kubestack(threading.Thread):
     log = logging.getLogger("kubestack.Kubestack") 
     POD_PREFIX = 'jenkins-slave'
 
-    def __init__(self, configfile):
+    def __init__(self, configfile, start_listeners=True):
         threading.Thread.__init__(self, name='Kubestack')
         self.configfile = configfile
-        self.jenkins = None
+        self.jenkins_object = None
         self.kube    = None
         self.image   = None
         self._stopped = False
@@ -30,14 +29,23 @@ class Kubestack(threading.Thread):
         self.destroy_listeners = []
         self.existing_pods = 0
         self.lock = threading.Lock()
+        self.start_listeners = start_listeners
 
         self.loadConfig()
         self.connectKube()
-        self.deletePodsByLabel(self.POD_PREFIX)
+        self.connectJenkins()
 
     # stops thread properly
     def stop(self):
         self._stopped = True
+
+        # disconnect listeners
+        for listener in self.destroy_listeners:
+            listener['object'].stop()
+            listener['object'].join()
+            if listener['type'] == 'zmq':
+                listener['object'].zmq_context.destroy()
+
 
     # main thread worker
     def run(self):
@@ -70,6 +78,16 @@ class Kubestack(threading.Thread):
             print str(e)
             sys.exit(1)
 
+    # start the connection with jenkins
+    def connectJenkins(self):
+        try:
+            self.jenkins_object = jenkins.Jenkins(self.jenkins_config['external_url'],
+                username=self.jenkins_config['user'], password=self.jenkins_config['pass'])
+        except Exception as e:
+            print "Error connecting to Jenkins"
+            print str(e)
+            sys.exit(1)
+
     # load configuration details
     def loadConfig(self):
         try:
@@ -85,7 +103,7 @@ class Kubestack(threading.Thread):
         self.image = config.get('image')
 
         self.jenkins_config = config.get('jenkins', {})
-        if not set(('url', 'user', 'pass')).issubset(self.jenkins_config):
+        if not set(('internal_url', 'external_url', 'user', 'pass')).issubset(self.jenkins_config):
             print "Jenkins configuration is not properly set"
             sys.exit(1)
 
@@ -95,32 +113,33 @@ class Kubestack(threading.Thread):
             sys.exit(1)
 
         # read demand listeners
-        demand_listeners = config.get('demand-listeners', [])
-        for listener in demand_listeners:
-            if listener['type'] == 'gearman':
-                if not set(('host', 'port')).issubset(listener):
-                    print "Gearman configuration is not properly set"
-                    sys.exit(1)
+        if self.start_listeners:
+            demand_listeners = config.get('demand-listeners', [])
+            for listener in demand_listeners:
+                if listener['type'] == 'gearman':
+                    if not set(('host', 'port')).issubset(listener):
+                        print "Gearman configuration is not properly set"
+                        sys.exit(1)
 
-                listener['object'] = listeners.GearmanClient(listener['host'], listener['port'])
-                listener['object'].connect()
+                    listener['object'] = listeners.GearmanClient(listener['host'], listener['port'])
+                    listener['object'].connect()
 
-            # add demand listener
-            self.demand_listeners.append(listener)
+                # add demand listener
+                self.demand_listeners.append(listener)
 
-        #  read destroy listeners
-        dlisteners = config.get('destroy-listeners', [])
-        for listener in dlisteners:
-            if listener['type'] == 'zmq':
-                if not set(('host', 'port')).issubset(listener):
-                    print "ZMQ configuration is not properly set"
-                    sys.exit(1)
+            #  read destroy listeners
+            dlisteners = config.get('destroy-listeners', [])
+            for listener in dlisteners:
+                if listener['type'] == 'zmq':
+                    if not set(('host', 'port')).issubset(listener):
+                        print "ZMQ configuration is not properly set"
+                        sys.exit(1)
 
-                listener['object'] = destroy_listeners.ZMQClient(self, listener['host'], listener['port'])
-                listener['object'].start()
+                    listener['object'] = destroy_listeners.ZMQClient(self, listener['host'], listener['port'])
+                    listener['object'].start()
 
-            # add destroy listener
-            self.destroy_listeners.append(listener)
+                # add destroy listener
+                self.destroy_listeners.append(listener)
 
     # returns a list of pods
     def getPods(self):
@@ -141,8 +160,28 @@ class Kubestack(threading.Thread):
         pod_template_list = self.kube.get_json(pod_templates)
         return pod_template_list
 
+    # remove a jenkins node that starts with that id
+    def deleteJenkinsNode(self, pod_id):
+        nodes = self.jenkins_object.get_nodes()
+        for node in nodes:
+            if pod_id in node['name']:
+                self.jenkins_object.delete_node(node['name'])
+                return True
+        return False
+
     # delete a given pod
     def deletePod(self, pod_id):
+        # first remove from jenkins
+        try:
+            self.deleteJenkinsNode(pod_id)
+        except Exception as e:
+            self.log.debug("Exception removing from jenkins")
+            print str(e)
+
+        # remove from kube independent of the result of jenkins
+        # if there was a failure on disconnect, when the node
+        # is deleted, jenkins will remove that automatically
+        # after a period of time
         try:
             self.lock.acquire()
             status = self.kube.delete(url='/pods/%s' % pod_id)
@@ -202,7 +241,7 @@ class Kubestack(threading.Thread):
                                 "sh",
                                 "-c",
                                 "/usr/local/bin/jenkins-slave.sh -master %s -username %s -password %s -executors 1 -labels %s" %
-                                (self.jenkins_config['url'], self.jenkins_config['user'],
+                                (self.jenkins_config['internal_url'], self.jenkins_config['user'],
                                  self.jenkins_config['pass'], label)
                             ]
                         }
