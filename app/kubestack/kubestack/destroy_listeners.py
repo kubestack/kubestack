@@ -55,7 +55,6 @@ class ZMQClient(threading.Thread):
     def handleEvent(self, topic, data):
         # read event and listen for finished jobs
         args = json.loads(data)
-        print args
         build = args['build']
         if 'node_name' not in build:
             return

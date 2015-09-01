@@ -32,8 +32,6 @@ class Kubestack(threading.Thread):
         self.start_listeners = start_listeners
 
         self.loadConfig()
-        self.connectKube()
-        self.connectJenkins()
 
     # stops thread properly
     def stop(self):
@@ -106,23 +104,30 @@ class Kubestack(threading.Thread):
         if not set(('internal_url', 'external_url', 'user', 'pass')).issubset(self.jenkins_config):
             print "Jenkins configuration is not properly set"
             sys.exit(1)
+        self.connectJenkins()
 
         self.kubernetes_config = config.get('kubernetes', {})
         if not set(('url', 'api_key')).issubset(self.kubernetes_config):
             print "Kuberentes configuration is not properly set"
             sys.exit(1)
+        self.connectKube()
 
         # read demand listeners
         if self.start_listeners:
             demand_listeners = config.get('demand-listeners', [])
             for listener in demand_listeners:
                 if listener['type'] == 'gearman':
+                    # gearman config
                     if not set(('host', 'port')).issubset(listener):
                         print "Gearman configuration is not properly set"
                         sys.exit(1)
 
                     listener['object'] = listeners.GearmanClient(listener['host'], listener['port'])
                     listener['object'].connect()
+
+                elif listener['type'] == 'jenkins_queue':
+                    # just create the listener object
+                    listener['object'] = listeners.JenkinsQueueClient(self)
 
                 # add demand listener
                 self.demand_listeners.append(listener)

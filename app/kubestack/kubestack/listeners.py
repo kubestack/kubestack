@@ -1,12 +1,18 @@
 import gear
+import jenkins
+import logging
+from xml.etree import cElementTree as ET
 
+# gearman demand listener
 class GearmanClient(gear.Client):
+    log = logging.getLogger("kubestack.GearmanClient")
+
     def __init__(self, host, port):
         super(GearmanClient, self).__init__(client_id='kubestack')
         self.host = host
         self.port = port
 
-    def connect(self):
+    def connect(self):        
         self.addServer(self.host, self.port)
         self.waitForServer()
 
@@ -63,5 +69,40 @@ class GearmanClient(gear.Client):
                 continue
             worker = workers[0]
             needed_workers[worker] = needed_workers.get(worker, 0) + queued
+
+        return needed_workers
+
+
+# jenkins queue listener
+class JenkinsQueueClient():
+    log = logging.getLogger("kubestack.JenkinsQueueClient")
+
+    def __init__(self, kube):
+        self.jenkins = kube.jenkins_object
+
+    # return demand from queue
+    def getDemand(self):
+        needed_workers = {}
+
+        # check build queue
+        queue_info = self.jenkins.get_queue_info()
+        for item in queue_info:
+            job = None
+            try:
+                if item['stuck'] and item['buildable']:
+                    job = item['task']['name']
+            except:
+                pass
+
+            # need to check the labels of this job
+            if job:
+                job_info = self.jenkins.get_job_config(job)
+                root = ET.fromstring(job_info)
+                title = root.find('assignedNode').text.strip()
+
+                if title not in needed_workers:
+                    needed_workers[title] = 1
+                else:
+                    needed_workers[title] += 1
 
         return needed_workers
