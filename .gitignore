@@ -1,5 +1,4 @@
 *.pyc
 app/lib
 app/local
-images
 app/kubestack/local
