@@ -14,7 +14,7 @@
     - nodes
   sudo: yes
   roles:
-    - { role: set_hostname_and_etc_hosts, instances_list: ['kube-master', 'kube-minion-1', 'kube-minion-2' ] }
+    - { role: set_hostname_and_etc_hosts, instances_list: ['kube-master', 'kube-minion-1', 'kube-minion-2', 'kube-minion-3' ] }
   tags:
     - name_resolution
 
@@ -59,6 +59,6 @@
   sudo: yes
   roles:
     - node
-    - { role: set_hostname_and_etc_hosts, instances_list: ['kube-master', 'kube-minion-1', 'kube-minion-2' ] }
+    - { role: set_hostname_and_etc_hosts, instances_list: ['kube-master', 'kube-minion-1', 'kube-minion-2', 'kube-minion-3' ] }
   tags:
     - nodes

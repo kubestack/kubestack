@@ -88,7 +88,6 @@ class JenkinsQueueClient():
         queue_info = self.jenkins.get_queue_info()
         for item in queue_info:
             job = None
-            print item
             try:
                 if item['stuck'] and item['buildable']:
                     job = item['task']['name']

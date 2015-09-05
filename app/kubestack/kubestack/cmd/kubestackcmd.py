@@ -48,14 +48,12 @@ class KubestackCmd(object):
             help='create a pod')
         cmd_create.set_defaults(func=self.create)
         cmd_create.add_argument('label', help='template label')
-        cmd_create.add_argument('image', help='template image')
 
         cmd_create_template = subparsers.add_parser(
             'create_template',
             help='create a pod template')
         cmd_create_template.set_defaults(func=self.create_template)
         cmd_create_template.add_argument('label', help='template label')
-        cmd_create_template.add_argument('image', help='template image')
 
         self.args = parser.parse_args()
 
@@ -87,17 +85,17 @@ class KubestackCmd(object):
 
     # create a pod template
     def create_template(self):
-        status = self.kubestack.createPodTemplate(self.args.label, self.args.image)
+        status = self.kubestack.createPodTemplate(self.args.label)
         if status.status_code == 201:
-            print "Pod template with label %s and image %s created successfully" % (self.args.label, self.args.image)
+            print "Pod template with label %s created successfully" % self.args.label
         else:
             print "Error on creating pod template. Status %s, error %s" % (status.status_code, status.reason)
 
     # create
     def create(self):
-        status = self.kubestack.createPod(self.args.label, self.args.image)
+        status = self.kubestack.createPod(self.args.label)
         if status.status_code == 201:
-            print "Pod with label %s and image %s created successfully" % (self.args.label, self.args.image)
+            print "Pod with label %s created successfully" % self.args.label
         else:
             print "Error on creating pod template. Status %s, error %s" % (status.status_code, status.reason)
 

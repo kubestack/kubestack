@@ -59,7 +59,7 @@ class Kubestack(threading.Thread):
                       if current_demand > 0:
                           # create all the pods we need
                           for _ in range(current_demand):
-                              self.createPod(key, self.image)
+                              self.createPod(key)
 
           except Exception as e:
               print str(e)
@@ -95,10 +95,20 @@ class Kubestack(threading.Thread):
             print error_message
             sys.exit(1)
 
-        if 'image' not in config:
-            print "Docker image is not properly set"
-            sys.exit(1)
-        self.image = config.get('image')
+        # label configuration
+        self.labels = {}
+        current_labels = config.get('labels', {})
+        for label in current_labels:
+            if not set(('name', 'image')).issubset(label) not in label:
+                self.log.debug("Label configuration is not properly set")
+                continue
+
+            # add label
+            current_label = {}
+            current_label['image'] = label['image']
+            current_label['cpu'] = label.get('cpu', 0)
+            current_label['memory'] = label.get('memory', 0)
+            self.labels[label['name']] = current_label
 
         self.jenkins_config = config.get('jenkins', {})
         if not set(('internal_url', 'external_url', 'user', 'pass')).issubset(self.jenkins_config):
@@ -224,10 +234,27 @@ class Kubestack(threading.Thread):
         return status
 
     # create a pod for a slave with the given label and image
-    def createPod(self, label, image):
+    def createPod(self, label):
+        # first check if label is available
+        if not label in self.labels:
+            self.log.debug("Label %s not available" % label)
+            return False
+
+        current_label = self.labels[label]
+
+        # cpu and memory
+        resources = {}
+        if current_label['cpu'] or current_label['memory']:
+            resources['limits'] = {}
+            if current_label['cpu']:
+                resources['limits']['cpu'] = current_label['cpu']
+            if current_label['memory']:
+                resources['limits']['memory'] = current_label['memory']
+
         try:
             self.lock.acquire()
             pod_id = self.POD_PREFIX + "-%s" % uuid4()
+
             pod_content = {
                 "kind": "Pod",
                 "apiVersion": "v1",
@@ -241,7 +268,8 @@ class Kubestack(threading.Thread):
                     "containers": [
                         {
                             "name": "jenkins-slave-%s" % label,
-                            "image": image,
+                            "image": current_label['image'],
+                            "resources": resources,
                             "command": [
                                 "sh",
                                 "-c",
@@ -253,6 +281,7 @@ class Kubestack(threading.Thread):
                     ]
                 }
             }
+
             result = self.kube.post(url='/pods', json=pod_content)
             self.existing_pods += 1
             self.lock.release()
@@ -264,7 +293,23 @@ class Kubestack(threading.Thread):
             return False
 
     # create a template for a slave with the given label and image
-    def createPodTemplate(self, label, image):
+    def createPodTemplate(self, label):
+        # first check if label is available
+        if not label in self.labels:
+            self.log.debug("Label %s not available" % label)
+            return False
+
+        current_label = self.labels[label]
+
+        # cpu and memory
+        resources = {}
+        if current_label['cpu'] or current_label['memory']:
+            resources['limits'] = {}
+            if current_label['cpu']:
+                resources['limits']['cpu'] = current_label['cpu']
+            if current_label['memory']:
+                resources['limits']['memory'] = current_label['memory']
+
         template_id = "jenkins-slave-%s" % uuid4()
         template_content = {
             "kind": "PodTemplate",
@@ -286,12 +331,13 @@ class Kubestack(threading.Thread):
                     "containers": [
                         {
                             "name": "jenkins-slave-%s" % label,
-                            "image": image,
+                            "image": current_label['image'],
+                            "resources": resources,
                             "command": [
                                 "sh",
                                 "-c",
                                 "/usr/local/bin/jenkins-slave.sh -master %s -username %s -password %s -executors 1 -labels %s" %
-                                (self.jenkins_config['url'], self.jenkins_config['user'],
+                                (self.jenkins_config['internal_url'], self.jenkins_config['user'],
                                  self.jenkins_config['pass'], label)
                             ]
                         }
