@@ -20,15 +20,11 @@ class ZMQClient(threading.Thread):
 
     # method to connect to external zmq
     def connect_socket(self):
-        self.socket = self.zmq_context.socket(zmq.PULL)
+        self.socket = self.zmq_context.socket(zmq.SUB)
         event_filter = b''
         final_url = "tcp://%s:%s" % (self.host, self.port)
-        print final_url
+        self.socket.setsockopt(zmq.SUBSCRIBE, event_filter)
         self.socket.connect(final_url)
-
-        self.poller = zmq.Poller()
-        self.poller.register(self.socket, zmq.POLLIN)
-        print self.poller
 
     def check_socket_health(self):
         if not self.zmq_context or self.zmq_context.closed:
@@ -38,16 +34,18 @@ class ZMQClient(threading.Thread):
 
     def run(self):
         while not self._stopped:
-            print "here"
             self.check_socket_health()
-            print "after"
-            socks = dict(self.poller.poll(1000))
-            if socks:
-                if socks.get(self.socket) == zmq.POLLIN:
-                    m = self.socket.recv(zmq.NOBLOCK)
-                    topic, data = m.split(None, 1)
-                    print topic, data
-                    self.handleEvent(topic, data)
+            try:
+                m = self.socket.recv(flags=zmq.NOBLOCK).decode('utf-8')
+            except zmq.error.Again:
+                time.sleep(self.watermark_sleep)
+                continue
+
+            try:
+                topic, data = m.split(None, 1)
+                self.handleEvent(topic, data)
+            except Exception:
+                self.log.exception("Exception handling job:")
 
     def stop(self):
         self._stopped = True

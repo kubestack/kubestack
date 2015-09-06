@@ -4,3 +4,5 @@ python-jenkins
 pyyaml
 PrettyTable>=0.6,<0.8
 zmq
+requests
+lockfile
