@@ -12,7 +12,7 @@ class GearmanClient(gear.Client):
         self.host = host
         self.port = port
 
-    def connect(self):        
+    def connect(self):
         self.addServer(self.host, self.port)
         self.waitForServer()
 
