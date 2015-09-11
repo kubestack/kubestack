@@ -14,7 +14,7 @@ from kubeclient import KubeClient
 from uuid import uuid4
 
 class Kubestack(threading.Thread):
-    log = logging.getLogger("kubestack.Kubestack") 
+    log = logging.getLogger("kubestack.Kubestack")
     POD_PREFIX = 'jenkins-slave'
 
     def __init__(self, configfile, start_listeners=True):
