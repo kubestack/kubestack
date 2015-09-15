@@ -14,6 +14,7 @@ cluster on OpenStack
 
 ### Create kubestack config file /etc/kubestack/config.yaml:
 
+```yaml
 demand-listeners:
     - name: gearman-server
       type: gearman
@@ -35,6 +36,7 @@ kubernetes:
     url: 'http://xx.xx.xx.xx:8080'
     api_key: key
 image: yrobla/jenkins-slave-swarm-infra:latest
+```
 
 ### Run kubestack
 
